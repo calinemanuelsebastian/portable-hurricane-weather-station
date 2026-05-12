@@ -1,9 +1,5 @@
 # Bill of Materials
 
-This list covers the minimum components required for the current prototype, consisting of one portable ESP32 weather station and one ESP32 central receiving station.
-
-> Note: The current firmware uses an AHT20 + BMP280 configuration. If the physical module is actually DHT22 + BMP280, the firmware and documentation should be adjusted accordingly.
-
 ---
 
 ## 1. Control and Communication
