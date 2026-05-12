@@ -106,7 +106,6 @@ This bill of materials covers the current functional prototype of the portable E
 ### Additional MP1584EN step-down converters
 - **Quantity:** several
 - **Status:** optional
-- **Notes:** useful for future versions with separate regulated voltage rails.
 
 ### MT3608 DC-DC boost converter
 - **Quantity:** 2
@@ -116,7 +115,6 @@ This bill of materials covers the current functional prototype of the portable E
 ### Additional MT3608 DC-DC boost converters
 - **Quantity:** several
 - **Status:** optional
-- **Notes:** useful for alternative power or charging configurations.
 
 ### USB cable / USB power adapter
 - **Quantity:** as required
