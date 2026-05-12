@@ -32,15 +32,13 @@ This bill of materials covers the current functional prototype of the portable E
 
 ## 2. Sensors and Display
 
-### AHT20 + BMP280 module / DHT22 + BMP280 module
+### AHT20 + BMP280 module
 - **Quantity:** 1
 - **Used for:** temperature, relative humidity and atmospheric pressure measurement
-- **Notes:** use the sensor type that matches the firmware.
 
 ### KY-003 Hall-effect sensor module
 - **Quantity:** 1
 - **Used for:** anemometer pulse detection
-- **Notes:** detects the passage of the magnets mounted on the rotating anemometer assembly.
 
 ### OLED display
 - **Quantity:** 1
