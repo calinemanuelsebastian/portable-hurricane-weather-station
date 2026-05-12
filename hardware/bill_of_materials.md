@@ -81,7 +81,7 @@ This bill of materials covers the current functional prototype of the portable E
 ### 18650 lithium-ion cells
 - **Quantity:** 2
 - **Used for:** portable unit power supply
-- **Notes:** connected in series.
+- **Notes:** connected in series. Other configurations could be used.
 
 ### Additional 18650 lithium-ion cells
 - **Quantity:** several
