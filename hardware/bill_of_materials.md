@@ -4,9 +4,6 @@ This bill of materials covers the current functional prototype of the portable E
 
 1. **portable_station_esp32** – the portable measurement unit;
 2. **central_station_esp32** – the receiving station connected to Wi-Fi and ThingSpeak.
-
-> Note: The current firmware uses an **AHT20 + BMP280** configuration. If the physical module is actually **DHT22 + BMP280**, the firmware and documentation should be adjusted accordingly.
-
 ---
 
 ## 1. Control and Communication Components
