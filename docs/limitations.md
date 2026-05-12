@@ -1,9 +1,3 @@
-
----
-
-## `docs/limitations.md`
-
-```markdown
 # Limitations
 
 ## Prototype status
@@ -21,7 +15,8 @@ Main limitations:
 - friction, bearing quality and rotor balance may influence measurements;
 - low wind speeds may be affected by starting friction;
 - strong gusts may require further testing;
-- the current algorithm requires validation under controlled conditions.
+- the current algorithm requires calibration and characterisation under controlled conditions;
+- the firmware currently uses an electrical debounce gate for Hall-sensor pulse detection, but no wind-speed-based edge rejection threshold is applied.
 
 ## Sensor limitations
 
@@ -35,11 +30,22 @@ Possible sources of error include:
 - pressure reduction errors if altitude is not set correctly;
 - sensor drift over time.
 
+## Pressure correction limitations
+
+The firmware converts pressure readings to sea-level equivalent pressure using a configured altitude value. If the altitude value is incorrect or left unchanged for a different deployment location, the reported sea-level pressure may be inaccurate.
+
+For more reliable pressure reporting, future versions should:
+
+- set the deployment altitude accurately;
+- document the altitude used during each test;
+- compare pressure readings with a reference instrument;
+- allow altitude configuration without modifying the firmware.
+
 ## Enclosure limitations
 
 The enclosure is made from 3D-printed PETG and uses a plexiglass front panel with a silicone gasket. Component ingresses are sealed with hot-melt adhesive.
 
-This provides basic prototype protection, but the enclosure is not formally IP-rated.
+This provides basic prototype-level protection, but the enclosure is not formally IP-rated.
 
 Further improvements are needed for:
 
@@ -61,7 +67,9 @@ Limitations include:
 - possible interference in the 2.4 GHz band;
 - reduced performance through walls or obstacles;
 - dependency on correct antenna positioning;
-- possible packet loss in unfavourable conditions.
+- possible packet loss in unfavourable conditions;
+- no quantified packet-loss, range or reliability measurements have been performed yet;
+- the transmitted packet is currently designed to fit within the nRF24L01 payload limit, so future changes to the packet structure should be checked carefully.
 
 Future versions may use SX1278 LoRa modules or ESP32 boards equipped with LoRa transceivers for improved range and robustness.
 
@@ -81,6 +89,13 @@ Power-related limitations include:
 
 The central station depends on Wi-Fi access and the availability of the ThingSpeak platform. If internet connectivity is lost, online visualisation may be interrupted.
 
+Possible limitations include:
+
+- dependency on Wi-Fi coverage at the central station;
+- dependency on the ThingSpeak platform;
+- interruption of online visualisation during internet outages;
+- possible mismatch between firmware field order and ThingSpeak channel labels if the channel is not configured consistently.
+
 Possible improvements include:
 
 - local data logging;
@@ -91,7 +106,7 @@ Possible improvements include:
 
 ## Testing limitations
 
-The current tests focused on functional operation, not on full validation.
+The current tests focused on functional operation, not on formal validation.
 
 The prototype has been tested for:
 
@@ -108,6 +123,7 @@ The prototype has not yet been fully tested for:
 - long-term outdoor reliability;
 - battery autonomy;
 - communication range;
+- packet-loss rate;
 - operation during heavy rain;
 - resistance to severe wind;
 - salt-air exposure;
