@@ -283,6 +283,6 @@ This bill of materials covers the current functional prototype of the portable E
 
 ## Notes
 
-Some screw lengths are approximate because they were cut to size during prototype assembly. Future versions should define standardised screw lengths after the final 3D-printed parts are fixed.
+Some screw lengths are approximate because they were cut to size during prototype assembly.
 
 The prototype is intended for functional testing and further development. For long-term outdoor deployment, the enclosure, sealing, connectors and mechanical fasteners should be improved and tested under realistic environmental conditions.
