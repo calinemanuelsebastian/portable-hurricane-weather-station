@@ -1,7 +1,5 @@
 # Bill of Materials
 
----
-
 ## 1. Control and Communication
 
 ### ESP32 development board
