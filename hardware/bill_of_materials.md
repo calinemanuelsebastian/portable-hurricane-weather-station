@@ -1,55 +1,166 @@
-```markdown
 # Bill of Materials
 
-This bill of materials covers the minimum components required for the current prototype, consisting of one portable ESP32 weather station and one ESP32 central receiving station.
+This list covers the minimum components required for the current prototype, consisting of one portable ESP32 weather station and one ESP32 central receiving station.
 
 > Note: The current firmware uses an AHT20 + BMP280 configuration. If the physical module is actually DHT22 + BMP280, the firmware and documentation should be adjusted accordingly.
 
 ---
 
-## Minimum Components
+## 1. Control and Communication
 
-| Component | Quantity | Used for | Notes |
-|---|---:|---|---|
-| ESP32 development board | 2 | Portable unit and central station | One ESP32 is used for sensor acquisition; the second ESP32 receives the data and publishes them online |
-| AHT20 + BMP280 module / DHT22 + BMP280 module | 1 | Portable unit | Temperature, relative humidity and atmospheric pressure measurement |
-| KY-003 Hall-effect sensor module | 1 | Portable unit | Pulse detection for the anemometer |
-| Neodymium magnets | 3 | Anemometer rotor | Mounted on the rotating assembly; the firmware is configured for 3 pulses per revolution |
-| nRF24L01 module | 2 | Portable unit and central station | Wireless communication between the two ESP32 boards |
-| OLED display | 1 | Portable unit | Local visualisation of measured values |
-| 18650 lithium-ion cells | 2 | Portable unit | Battery power supply |
-| 2S BMS module | 1 | Portable unit | Battery protection for the two 18650 cells connected in series |
-| MP1584EN step-down converter | 1 | Portable unit | 3.3 V regulated supply for sensors and low-voltage modules |
-| MT3608 DC-DC boost converter | 2 | Portable unit | 5 V supply for the ESP32 and 8.4 V charging stage |
-| PETG printed parts | Several | Mechanical structure | Enclosure, anemometer hub, arms and internal supports |
-| Plexiglass sheet | 1 | Enclosure | Front panel |
-| Silicone gasket material | 1 | Enclosure | Sealing between the enclosure and the plexiglass front panel |
-| Bearings | 2 | Anemometer shaft | Bearing size should be selected according to the shaft and hub design |
-| M3 screws | As required | Enclosure and internal mounting | Used for securing electronic modules, brackets and smaller printed parts |
-| M4 screws | As required | Enclosure and mechanical structure | Used for stronger mechanical connections, depending on the printed design |
-| M3 heat-set threaded inserts | As required | PETG printed parts | Recommended for repeated assembly/disassembly of small components |
-| M4 heat-set threaded inserts | As required | PETG printed parts | Recommended for stronger mechanical fixing points |
-| M3/M4 nuts and washers | As required | Mechanical assembly | Useful where threaded inserts are not used |
-| Wires and connectors | As required | Electrical connections | Dupont wires, soldered wires, JST connectors or similar |
-| Heat-shrink tubing | As required | Electrical protection | Used for insulation and strain relief |
-| Hot-melt adhesive or sealant | As required | Enclosure sealing | Used to seal cable/component ingresses in the prototype |
+### ESP32 development board
+- **Quantity:** 2
+- **Used for:** portable measurement unit and central receiving station
+- **Notes:** one ESP32 reads the sensors and transmits data; the second ESP32 receives the data and publishes them online.
+
+### nRF24L01 wireless module
+- **Quantity:** 2
+- **Used for:** wireless communication between the portable unit and the central station
+- **Notes:** used in the current functional prototype.
+
+### SX1278 LoRa module
+- **Quantity:** 2
+- **Status:** optional / future improvement
+- **Notes:** may be used in future versions where longer communication range is required.
 
 ---
 
-## Optional Components and Future Improvements
+## 2. Sensors and Local Display
 
-| Component | Quantity | Used for | Notes |
-|---|---:|---|---|
-| SX1278 LoRa module | 2 | Alternative wireless communication | Possible replacement for nRF24L01 where longer communication range is required |
-| ESP32 board with integrated LoRa transceiver | 2 | Alternative system architecture | Could simplify long-range communication in future versions |
-| Additional 2S BMS modules | Several | Future units | Useful if multiple portable stations are built |
-| Additional MP1584EN step-down converters | Several | Future units | Useful for separate regulated voltage rails |
-| Additional MT3608 DC-DC boost converters | Several | Future units | Useful for alternative power or charging configurations |
-| Larger OLED display | 1–2 | Local visualisation | Optional improvement for better readability |
-| Additional 18650 lithium-ion cells | Several | Extended autonomy | Useful for larger battery packs or backup power |
-| Solar charging module | 1 | Future power system | Could improve autonomy during field deployment |
-| MicroSD card module | 1 | Local data logging | Useful for storing measurements during internet outages |
-| Weatherproof cable glands | As required | Enclosure improvement | Recommended for more robust outdoor use |
-| Corrosion-resistant screws | As required | Outdoor deployment | Stainless steel screws are recommended for humid or salt-air environments |
-| PETG filament | 1 kg | 3D printing | Required if printing the enclosure, hub, arms and supports locally |
-```
+### AHT20 + BMP280 module / DHT22 + BMP280 module
+- **Quantity:** 1
+- **Used for:** temperature, relative humidity and atmospheric pressure measurement
+- **Notes:** use the sensor type that matches the firmware.
+
+### KY-003 Hall-effect sensor module
+- **Quantity:** 1
+- **Used for:** anemometer pulse detection
+- **Notes:** detects the passage of the magnets mounted on the rotating anemometer assembly.
+
+### OLED display
+- **Quantity:** 1
+- **Used for:** local visualisation on the portable unit
+- **Notes:** displays temperature, humidity, pressure, wind speed and status information.
+
+---
+
+## 3. Anemometer Assembly
+
+### Neodymium magnets
+- **Quantity:** 3
+- **Used for:** pulse generation
+- **Notes:** mounted on the rotating anemometer assembly. The firmware is currently configured for three pulses per revolution.
+
+### Bearings
+- **Quantity:** 2
+- **Used for:** anemometer shaft support
+- **Notes:** bearing size should match the shaft and hub design.
+
+### PETG printed parts
+- **Quantity:** several
+- **Used for:** anemometer arms, hub and enclosure parts
+- **Notes:** printed from PETG for improved mechanical and environmental resistance compared with PLA.
+
+---
+
+## 4. Power Supply
+
+### 18650 lithium-ion cells
+- **Quantity:** 2
+- **Used for:** portable unit power supply
+- **Notes:** connected in series.
+
+### 2S BMS module
+- **Quantity:** 1
+- **Used for:** battery protection
+- **Notes:** protects the two 18650 cells connected in series.
+
+### MP1584EN step-down converter
+- **Quantity:** 1
+- **Used for:** regulated 3.3 V supply
+- **Notes:** supplies low-voltage modules such as sensors and radio modules.
+
+### MT3608 DC-DC boost converter
+- **Quantity:** 2
+- **Used for:** 5 V ESP32 supply and charging stage
+- **Notes:** one converter can be used for the ESP32 supply, while another can be configured for the charging stage.
+
+---
+
+## 5. Enclosure and Mechanical Parts
+
+### Plexiglass sheet
+- **Quantity:** 1
+- **Used for:** front panel
+- **Notes:** allows visibility of the OLED display and internal layout.
+
+### Silicone gasket material
+- **Quantity:** 1
+- **Used for:** front panel sealing
+- **Notes:** placed between the plexiglass panel and the enclosure.
+
+### M3 screws
+- **Quantity:** as required
+- **Used for:** electronic modules, brackets and smaller printed parts
+
+### M4 screws
+- **Quantity:** as required
+- **Used for:** stronger mechanical connections and enclosure fixing points
+
+### M3 heat-set threaded inserts
+- **Quantity:** as required
+- **Used for:** repeated assembly and disassembly of smaller PETG parts
+
+### M4 heat-set threaded inserts
+- **Quantity:** as required
+- **Used for:** stronger mechanical fixing points in printed parts
+
+### M3/M4 nuts and washers
+- **Quantity:** as required
+- **Used for:** mechanical fastening where threaded inserts are not used
+
+### Wires and connectors
+- **Quantity:** as required
+- **Used for:** electrical connections
+- **Notes:** Dupont wires, soldered wires, JST connectors or similar.
+
+### Heat-shrink tubing
+- **Quantity:** as required
+- **Used for:** insulation and strain relief
+
+### Hot-melt adhesive or sealant
+- **Quantity:** as required
+- **Used for:** prototype sealing
+- **Notes:** used to seal cable and component ingresses.
+
+---
+
+## 6. Optional Future Additions
+
+### Larger OLED display
+- **Quantity:** 1–2
+- **Purpose:** improved readability
+
+### Additional 18650 lithium-ion cells
+- **Quantity:** several
+- **Purpose:** extended autonomy or additional prototype units
+
+### Solar charging module
+- **Quantity:** 1
+- **Purpose:** improved autonomy during outdoor deployment
+
+### MicroSD card module
+- **Quantity:** 1
+- **Purpose:** local data logging during internet outages
+
+### Weatherproof cable glands
+- **Quantity:** as required
+- **Purpose:** improved enclosure sealing
+
+### Corrosion-resistant screws
+- **Quantity:** as required
+- **Purpose:** improved durability in humid or salt-air environments
+
+### PETG filament
+- **Quantity:** approximately 1 kg
+- **Purpose:** printing the enclosure, hub, arms and supports
