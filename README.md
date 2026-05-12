@@ -12,7 +12,7 @@ This project is currently a functional prototype. The system has been tested for
 
 - ESP32-based portable measurement unit
 - Custom cup anemometer with Hall-effect pulse detection
-- DHT22 temperature and relative humidity measurement
+- AHT22 temperature and relative humidity measurement
 - BMP280 atmospheric pressure measurement
 - nRF24L01 wireless communication between the portable unit and central station
 - ESP32-based central station with Wi-Fi connection
