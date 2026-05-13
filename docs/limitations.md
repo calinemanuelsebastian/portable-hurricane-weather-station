@@ -161,5 +161,3 @@ Recommended future developments include:
 - local data storage;
 - improved power management;
 - better radiation shielding for the temperature and humidity sensor;
-- configurable warning thresholds;
-- publication of 3D-printable parts and assembly documentation.
