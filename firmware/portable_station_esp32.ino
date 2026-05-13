@@ -694,7 +694,7 @@ void setup() {
   Serial.println();
   Serial.println("TX v3.3 - stable efficient wind sampler");
 
-  Wire.begin(16, 17);
+  Wire.begin(16, 17); // SDA, SCL
   Wire.setClock(400000);
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
