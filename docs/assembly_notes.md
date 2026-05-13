@@ -244,11 +244,10 @@ windSpeedMps = calibrationOffsetMps
              + pulseHz * calibrationFactor * 2 * PI * cupRadiusMeters / pulsesPerRevolution
 ```
 
-The code applies an electrical debounce filter to reduce chatter from the Hall sensor input. The previous wind-speed-based `70 kt` edge gate has been removed, so the remaining gate is only:
+The code also applies pulse rejection to reduce electrical chatter and physically unrealistic edge spacing. The current maximum valid wind gate is:
 
 ```cpp
-const unsigned long ELECTRICAL_DEBOUNCE_US = 5000UL;
-const unsigned long EDGE_GATE_US = ELECTRICAL_DEBOUNCE_US;
+const float MAX_VALID_WIND_KT = 70.0f;
 ```
 
 The wind-speed algorithm must be calibrated against a reference anemometer before the system is used for quantitative meteorological measurements.
