@@ -1,12 +1,15 @@
 # Bill of Materials
 
-This bill of materials covers the current functional prototype of the portable ESP32-based weather station. The system consists of two main units:
+This bill of materials covers the current functional prototype of the portable ESP32-based weather monitoring system. The system consists of two main units:
 
-1. **portable_station_esp32** – the portable measurement unit;
-2. **central_station_esp32** – the receiving station connected to Wi-Fi and ThingSpeak.
+1. **portable_station_esp32** — the portable measurement unit;
+2. **central_station_esp32** — the receiving station connected to Wi-Fi and ThingSpeak.
+
+> Note: the current firmware uses an **AHT20 + BMP280** configuration. If the physical module is changed, the firmware, documentation and ThingSpeak labels should be updated accordingly.
+
 ---
 
-## 1. Control and Communication Components
+## 1. Control and communication components
 
 ### ESP32 development board
 - **Quantity:** 2
@@ -30,29 +33,31 @@ This bill of materials covers the current functional prototype of the portable E
 
 ---
 
-## 2. Sensors and Display
+## 2. Sensors and display
 
-### AHT20 + BMP280 module
+### AHT20 sensor module
 - **Quantity:** 1
-- **Used for:** temperature, relative humidity and atmospheric pressure measurement
+- **Used for:** temperature and relative humidity measurement
+- **Notes:** connected to the portable ESP32 through the I2C bus.
+
+### BMP280 module
+- **Quantity:** 1
+- **Used for:** atmospheric pressure measurement
+- **Notes:** connected to the portable ESP32 through the I2C bus. The firmware can use address `0x77` or `0x76`, depending on the physical module.
 
 ### KY-003 Hall-effect sensor module
 - **Quantity:** 1
 - **Used for:** anemometer pulse detection
+- **Notes:** detects the passage of the magnets mounted on the rotating anemometer assembly.
 
 ### OLED display
 - **Quantity:** 1
 - **Used for:** local visualisation on the portable unit
 - **Notes:** displays temperature, humidity, pressure, wind speed and system status information.
 
-### Larger OLED display
-- **Quantity:** 1–2
-- **Status:** optional
-- **Notes:** may be used in future versions for improved readability.
-
 ---
 
-## 3. Anemometer Assembly
+## 3. Anemometer assembly
 
 ### Neodymium magnets
 - **Quantity:** 3
@@ -62,12 +67,12 @@ This bill of materials covers the current functional prototype of the portable E
 ### 625 bearings
 - **Quantity:** 2
 - **Used for:** anemometer shaft support
-- **Notes:** open bearings are preferred. In the prototype, 625ZZ bearings were modified by removing the metal shields and cleaning the grease to reduce rotational resistance.
+- **Notes:** open bearings are preferred. In the prototype, 625ZZ bearings may be modified by removing the metal shields and cleaning the grease to reduce rotational resistance.
 
 ### M5 threaded rod or M5 screw
 - **Quantity:** 1
 - **Used for:** anemometer shaft assembly
-- **Notes:** cut to approximately **50 mm**.
+- **Notes:** cut to the length required by the printed anemometer structure.
 
 ### PETG printed anemometer parts
 - **Quantity:** several
@@ -76,45 +81,42 @@ This bill of materials covers the current functional prototype of the portable E
 
 ---
 
-## 4. Power Supply Components
+## 4. Power supply components
 
 ### 18650 lithium-ion cells
 - **Quantity:** 2
 - **Used for:** portable unit power supply
-- **Notes:** connected in series. Other configurations could be used.
-
-### Additional 18650 lithium-ion cells
-- **Quantity:** several
-- **Status:** optional
-- **Notes:** useful for extended autonomy, backup power or additional prototype units.
+- **Notes:** connected in series as a 2S battery pack.
 
 ### 2S BMS module
 - **Quantity:** 1
 - **Used for:** battery protection
 - **Notes:** protects the two 18650 cells connected in series.
 
-### Additional 2S BMS modules
-- **Quantity:** several
-- **Status:** optional
-- **Notes:** useful if multiple portable units are built.
+### Main power switch
+- **Quantity:** 1
+- **Used for:** main portable-station power control, if installed immediately after the BMS output
+- **Notes:** use this switch to disconnect the complete portable unit from the battery supply if a full master on/off function is required.
+
+### 3.3 V rail switch
+- **Quantity:** 1
+- **Used for:** switching the input of the 3.3 V DC-DC converter
+- **Notes:** in the current documented wiring, this switch is placed between the BMS/power distribution positive output and the MP1584EN input. It controls the 3.3 V rail used by the AHT20, BMP280, OLED display, KY-003 Hall sensor and nRF24L01 module.
 
 ### MP1584EN step-down converter
 - **Quantity:** 1
 - **Used for:** regulated 3.3 V supply
-- **Notes:** supplies low-voltage modules such as sensors and radio modules.
+- **Notes:** supplies low-voltage modules such as the AHT20, BMP280, OLED display, KY-003 and nRF24L01. Verify the output with a multimeter before connecting the modules.
 
-### Additional MP1584EN step-down converters
-- **Quantity:** several
+### 5 V regulator / boost converter
+- **Quantity:** 1
+- **Used for:** 5 V ESP32 development-board supply, if the ESP32 is powered through VIN/5V
+- **Notes:** choose a regulator suitable for the 2S lithium-ion input range. A fully charged 2S pack can reach approximately 8.4 V.
+
+### Additional DC-DC converters
+- **Quantity:** as required
 - **Status:** optional
-
-### MT3608 DC-DC boost converter
-- **Quantity:** 2
-- **Used for:** 5 V ESP32 supply and charging stage
-- **Notes:** one converter can be used for the ESP32 supply, while another can be configured for the charging stage.
-
-### Additional MT3608 DC-DC boost converters
-- **Quantity:** several
-- **Status:** optional
+- **Notes:** useful for alternative power architectures, separate rails or charging experiments.
 
 ### USB cable / USB power adapter
 - **Quantity:** as required
@@ -128,7 +130,7 @@ This bill of materials covers the current functional prototype of the portable E
 
 ---
 
-## 5. Enclosure and Printed Parts
+## 5. Enclosure and printed parts
 
 ### PETG printed enclosure
 - **Quantity:** 1 complete set
@@ -162,62 +164,31 @@ This bill of materials covers the current functional prototype of the portable E
 
 ---
 
-## 6. Mechanical Fasteners and Assembly Hardware
+## 6. Mechanical fasteners and assembly hardware
 
-### M5 threaded inserts
-- **Quantity:** 11
-- **Used for:** main enclosure and stronger mechanical fixing points.
-
-### M3 threaded inserts
-- **Quantity:** 9
-- **Used for:** smaller printed parts, electronic supports and internal mounting points.
-
-### M6 threaded insert
-- **Quantity:** 1
-- **Used for:** larger mechanical fixing point in the printed structure.
-
-### M3 × 30 mm Phillips screws
-- **Quantity:** 3
-- **Used for:** deeper fastening points or parts requiring longer screws.
-
-### M3 × 10 mm Phillips screws
-- **Quantity:** 6
-- **Used for:** smaller brackets, internal supports or electronic module fixing.
-
-### M5 × 16 mm screws
-- **Quantity:** 2
-- **Notes:** approximate length; cut to size during assembly.
-
-### M5 × 16 mm butterfly screws
-- **Quantity:** 4
-- **Notes:** approximate length; cut to size during assembly.
-- **Used for:** removable access points, such as the plexiglass front panel.
-
-### Wide washers for butterfly screws
-- **Quantity:** 4
-- **Used for:** distributing pressure over the plexiglass/front panel area.
-
-### M5 nuts
-- **Quantity:** 3
-- **Used for:** securing the shaft and mechanical assembly.
-
-### M5 washers
-- **Quantity:** 6
-- **Used for:** spacing, alignment and load distribution around the rotating assembly.
-
-### Corrosion-resistant screws
+### Threaded inserts
 - **Quantity:** as required
-- **Status:** optional / future improvement
-- **Notes:** stainless steel screws are recommended for humid or salt-air environments.
+- **Used for:** printed enclosure and mechanical fixing points
+- **Notes:** use the sizes required by the final printed design.
+
+### Screws, nuts and washers
+- **Quantity:** as required
+- **Used for:** enclosure, front panel, supports and anemometer assembly
+- **Notes:** stainless steel or corrosion-resistant fasteners are recommended for humid or salt-air environments.
+
+### Butterfly screws and wide washers
+- **Quantity:** as required
+- **Used for:** removable access points, such as the plexiglass front panel
+- **Notes:** useful where repeated access to the internal electronics is needed.
 
 ---
 
-## 7. Wiring and Electrical Assembly Materials
+## 7. Wiring and electrical assembly materials
 
 ### Wires and connectors
 - **Quantity:** as required
 - **Used for:** electrical connections
-- **Notes:** Dupont wires, soldered wires, JST connectors or similar.
+- **Notes:** Dupont wires, soldered wires, JST connectors or similar may be used. Soldered or locking connectors are preferred for field use.
 
 ### Header pins
 - **Quantity:** as required
@@ -231,17 +202,18 @@ This bill of materials covers the current functional prototype of the portable E
 
 ### Heat-shrink tubing
 - **Quantity:** as required
-- **Used for:** insulation and strain relief.
+- **Used for:** insulation and strain relief
+- **Notes:** recommended for soldered joints and exposed conductors.
 
 ### Capacitor for nRF24L01 module
 - **Quantity:** 1–2
 - **Recommended value:** 10 µF to 100 µF
-- **Used for:** stabilising the nRF24L01 power supply.
-- **Notes:** recommended because nRF24L01 modules can be sensitive to voltage drops.
+- **Used for:** stabilising the nRF24L01 power supply
+- **Notes:** place the capacitor close to the nRF24L01 VCC and GND pins.
 
 ---
 
-## 8. Adhesives, Sealants and Auxiliary Materials
+## 8. Adhesives, sealants and auxiliary materials
 
 ### Threadlocker, e.g. Loctite
 - **Quantity:** as required
@@ -262,7 +234,7 @@ This bill of materials covers the current functional prototype of the portable E
 
 ---
 
-## 9. Optional Data and Autonomy Improvements
+## 9. Optional data and autonomy improvements
 
 ### MicroSD card module
 - **Quantity:** 1
@@ -283,6 +255,8 @@ This bill of materials covers the current functional prototype of the portable E
 
 ## Notes
 
-Some screw lengths are approximate because they were cut to size during prototype assembly.
+The current documented wiring includes a dedicated **3.3 V rail switch** between the BMS/power distribution output and the 3.3 V DC-DC converter input. This switch controls the low-voltage peripheral rail only. If the ESP32 5 V regulator is connected separately, the ESP32 may remain powered while the 3.3 V rail is off. Avoid this operating state for long periods because peripherals can be unintentionally back-powered through signal lines.
+
+Some screw lengths are approximate because they may be cut to size during prototype assembly. Future versions should define standardised screw lengths after the final 3D-printed parts are fixed.
 
 The prototype is intended for functional testing and further development. For long-term outdoor deployment, the enclosure, sealing, connectors and mechanical fasteners should be improved and tested under realistic environmental conditions.
