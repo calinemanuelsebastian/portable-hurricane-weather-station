@@ -77,13 +77,16 @@ Future versions may use SX1278 LoRa modules or ESP32 boards equipped with LoRa t
 
 The portable unit uses two 18650 lithium-ion cells. Battery autonomy has not yet been fully tested under long-term outdoor operation.
 
+The current documented wiring also includes a dedicated switch between the BMS/power distribution output and the input of the 3.3 V DC-DC converter. This allows the 3.3 V peripheral rail to be switched independently, but it also requires careful operation if the ESP32 5 V supply remains active.
+
 Power-related limitations include:
 
 - unknown long-term battery life;
 - reduced capacity in cold or harsh conditions;
 - possible voltage drops under load;
 - charging system requiring further testing;
-- lack of integrated solar charging in the current version.
+- lack of integrated solar charging in the current version;
+- possible unintended back-powering of peripheral modules if the ESP32 is powered while the switched 3.3 V rail is off.
 
 ## Online publication limitations
 
