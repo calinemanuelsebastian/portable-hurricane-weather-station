@@ -7,6 +7,7 @@ The prototype measures wind speed, temperature, relative humidity and atmospheri
 ## Links
 
 Printables: https://www.printables.com/model/1719175-portable-esp32-weather-station-for-hurricane-prone 
+
 ThingSpeak: https://thingspeak.mathworks.com/channels/3365147
 
 ## Project Status
