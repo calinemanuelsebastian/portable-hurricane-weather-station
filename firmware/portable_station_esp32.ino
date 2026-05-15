@@ -146,7 +146,6 @@ unsigned long lastSensorUpdateMs = 0;
 unsigned long lastTxWindSampleMs = 0;
 
 uint32_t lastWindBinPulseTotal = 0;
-uint32_t txPacketCount = 0;
 
 float temperatureC = 20.0f;
 float humidityPct = 50.0f;
@@ -652,16 +651,11 @@ void sendPacket() {
 
   bool ok = radio.write(&tx, sizeof(tx));
 
-  txPacketCount++;
-
   uint32_t pulsesNow;
   uint32_t bounceNow;
   snapshotHallCounters(pulsesNow, bounceNow);
 
-  Serial.print("TX ");
-  Serial.print(txPacketCount);
-
-  Serial.print(" sampleMs=");
+  Serial.print("TX sampleMs=");
   Serial.print(tx.sampleMs);
 
   Serial.print(" wind=");
@@ -732,9 +726,6 @@ void serviceDisplay() {
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-
-  display.print("TX: ");
-  display.println(txPacketCount);
 
   display.print("W: ");
   display.print(displayedWindMps, 1);
