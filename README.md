@@ -31,7 +31,7 @@ This project is currently a functional prototype. The system has been tested for
 The system is organised as follows:
 
 ```text
-AHT22 + BMP280 + Hall-effect anemometer
+AHT20 + BMP280 + Hall-effect anemometer
                 ↓
         ESP32 portable unit
                 ↓
