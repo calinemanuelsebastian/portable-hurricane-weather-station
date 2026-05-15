@@ -4,6 +4,11 @@ This repository contains the firmware, hardware documentation and development no
 
 The prototype measures wind speed, temperature, relative humidity and atmospheric pressure using an ESP32-based measurement unit, a custom Hall-effect cup anemometer, a DHT22 sensor and a BMP280 pressure sensor. Data are transmitted wirelessly to a central ESP32 station using nRF24L01 modules and published online through the ThingSpeak platform for remote visualisation.
 
+## Links
+
+Printables: https://www.printables.com/model/1719175-portable-esp32-weather-station-for-hurricane-prone 
+ThingSpeak: https://thingspeak.mathworks.com/channels/3365147
+
 ## Project Status
 
 This project is currently a functional prototype. The system has been tested for sensor acquisition, wireless transmission and online data publication. The wind-speed conversion algorithm is not callibrated against a reference anemometer.
