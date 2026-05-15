@@ -12,72 +12,80 @@
 // =====================================================
 // USER SETTINGS
 // =====================================================
-const unsigned long WIND_SAMPLE_MS   = 100;     // wind bin interval
-const unsigned long OLED_UPDATE_MS   = 500;     // stable display refresh
-const unsigned long SENSOR_UPDATE_MS = 1000;    // AHT20 + BMP280 refresh
-const unsigned long SEND_INTERVAL_MS = 15000;   // transmit after 15 s of sampled wind time
-
-const float cupRadiusMeters = 0.146f;           // shaft center -> cup center
-const int pulsesPerRevolution = 3;              // 3 magnets
-const float calibrationFactor = 4.2833f;        // geometry-derived first estimate
-const float calibrationOffsetMps = 0.0f;        // keep 0 unless later calibrated
-const float altitudeM = 0.0f;                   // set real altitude if needed
+const unsigned long WIND_BIN_MS       = 100UL;    // pulse-count bin interval
+const unsigned long TX_INTERVAL_MS    = 1000UL;   // RF packet interval
+const unsigned long OLED_UPDATE_MS    = 500UL;    // OLED refresh
+const unsigned long SENSOR_UPDATE_MS  = 1000UL;   // AHT20 + BMP280 refresh
 
 // =====================================================
-// WIND SETTINGS
+// ANEMOMETER GEOMETRY
+// =====================================================
+// Magnet radius is informational only.
+// It is NOT used in wind-speed conversion.
+const float magnetRadiusMeters = 0.020f;          // 20 mm
+
+// Important wind-conversion radius:
+// shaft center -> cup center.
+const float cupRadiusMeters = 0.146f;             // 146 mm
+
+const float cupAssemblyDiameterMeters = cupRadiusMeters * 2.0f;
+
+// Three magnets at 120 degrees.
+// Must equal accepted Hall pulses per real rotor revolution.
+const int pulsesPerRevolution = 3;
+
+// Starting calibration estimate.
+// This is not pure geometry. Adjust after comparing to a reference anemometer.
+const float calibrationFactor = 2.7f;
+const float calibrationOffsetMps = 0.0f;
+
+// Set this to real station altitude above mean sea level.
+const float altitudeM = 0.0f;
+
+// =====================================================
+// WIND MEASUREMENT SETTINGS
 // =====================================================
 const float TWO_PI_F = 6.28318530718f;
 
+const float CUP_CIRCUMFERENCE_M =
+  TWO_PI_F * cupRadiusMeters;
+
+const float WIND_MPS_PER_RPS =
+  calibrationFactor * CUP_CIRCUMFERENCE_M;
+
+const float WIND_MPS_PER_RPM =
+  WIND_MPS_PER_RPS / 60.0f;
+
 const float WIND_MPS_PER_PULSE_HZ =
-  calibrationFactor * TWO_PI_F * cupRadiusMeters / (float)pulsesPerRevolution;
+  WIND_MPS_PER_RPS / (float)pulsesPerRevolution;
 
-const float WIND_KT_PER_PULSE_HZ =
-  WIND_MPS_PER_PULSE_HZ * 1.94384f;
+// Rolling RPM/RPS window.
+// Shorter = faster but noisier.
+// Longer = smoother but slower.
+const unsigned long WIND_WINDOW_MS = 3000UL;
+const unsigned long WIND_MIN_WINDOW_MS = 1500UL;
 
-// Live display wind is now intentionally stable.
-// With 3 pulses/rev, short windows are naturally jumpy.
-const unsigned long WIND_CURRENT_WINDOW_MS = 3000UL;
-const unsigned long WIND_CURRENT_MIN_MS    = 2000UL;
+// 50 bins x 100 ms = around 5 seconds of history.
+const uint8_t WIND_RING_SIZE = 50;
 
-// Gust/peak is highest rolling 3-second wind inside the 15 s TX interval.
-const unsigned long WIND_GUST_WINDOW_MS = 3000UL;
+// Small electrical debounce only.
+// If pulse count is too high, try 2000 or 3000.
+// If pulse count is too low at high RPM, try 0.
+const unsigned long HALL_DEBOUNCE_US = 1000UL;
 
-// 60 bins at 100 ms = about 6 seconds of history.
-const uint8_t WIND_RING_SIZE = 60;
-
-// Display smoothing.
-// Lower = smoother. Higher = more responsive.
-const float WIND_DISPLAY_ALPHA_RISE = 0.35f;
-const float WIND_DISPLAY_ALPHA_FALL = 0.22f;
-
-// Electrical chatter rejection.
-const unsigned long ELECTRICAL_DEBOUNCE_US = 5000UL;
-
-// Input validation gate.
-// This is not a display cap; it rejects impossible Hall edge spacing.
-// Use 60-80 kt depending on your station.
-// Lower = more stable / stricter.
-const float MAX_VALID_WIND_KT = 70.0f;
-const float MAX_VALID_WIND_MPS = MAX_VALID_WIND_KT / 1.94384f;
-
-const unsigned long MIN_PHYSICAL_EDGE_INTERVAL_US =
-  (unsigned long)((1000000.0f * WIND_MPS_PER_PULSE_HZ) / MAX_VALID_WIND_MPS);
-
-const unsigned long EDGE_GATE_US =
-  (MIN_PHYSICAL_EDGE_INTERVAL_US > ELECTRICAL_DEBOUNCE_US)
-    ? MIN_PHYSICAL_EDGE_INTERVAL_US
-    : ELECTRICAL_DEBOUNCE_US;
+// Local 15 s OLED mean preview.
+const unsigned long WIND_MEAN_WINDOW_MS = 15000UL;
+const unsigned long WIND_MEAN_MIN_MS    = 3000UL;
+const uint8_t WIND_MEAN_RING_SIZE = 20;
 
 // =====================================================
-// AHT20
+// AHT20 / BMP280
 // =====================================================
 #define AHT20_ADDRESS 0x38
-
-// =====================================================
-// BMP280
-// =====================================================
 #define BMP280_ADDRESS 0x77   // change to 0x76 if needed
+
 Adafruit_BMP280 bmp;
+bool bmpOk = false;
 
 // =====================================================
 // OLED
@@ -88,78 +96,72 @@ Adafruit_BMP280 bmp;
 #define OLED_ADDRESS 0x3C     // change to 0x3D if needed
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+bool oledOk = false;
 
 // =====================================================
 // nRF24
 // =====================================================
+// Use the CE/CSN pins that worked in your radio-only test.
 #define CE_PIN    22
 #define CSN_PIN    5
 #define SCK_PIN   18
 #define MISO_PIN  19
 #define MOSI_PIN  23
 
+const uint8_t RADIO_CHANNEL = 76;
+
 RF24 radio(CE_PIN, CSN_PIN);
 const byte pipeAddress[6] = "RxAAA";
 
 // =====================================================
-// KY-003 Hall
+// KY-003 Hall sensor
 // =====================================================
 const int hallPin = 4;
 
-volatile uint32_t windAcceptedPulses = 0;
-volatile uint32_t windRejectedEdges = 0;
-volatile unsigned long lastAcceptedEdgeUs = 0;
-volatile unsigned long shortestAcceptedPeriodUs = 0xFFFFFFFFUL;
+volatile uint32_t hallPulseTotal = 0;
+volatile uint32_t hallRejectedBounce = 0;
+volatile unsigned long lastHallPulseUs = 0;
 
 // =====================================================
-// SHARED PACKET DEFINITION
+// COMPACT RF PACKET
+// Fixed 14-byte payload.
 // Must match receiver exactly.
-// 32 bytes total.
 // =====================================================
-static const uint32_t PACKET_MAGIC = 0x574E4431UL; // "WND1"
-static const uint8_t PACKET_VERSION = 1;
-
-struct __attribute__((packed)) SensorPacket {
-  uint32_t magic;
-  uint8_t  version;
-  uint8_t  reserved;
-  uint16_t seq;
-
-  float temperatureC;
-  float humidityPct;
-  float seaLevelHpa;
-
-  float windInstantMps;
-  float windMeanMps;
-  float windPeakMps;
+struct __attribute__((packed)) WeatherPacket {
+  uint32_t txMs;             // transmitter millis()
+  uint16_t sampleMs;         // RF sample duration
+  uint16_t windMpsX10;       // wind m/s * 10
+  int16_t  temperatureCx10;  // temperature C * 10
+  uint16_t humidityX10;      // RH % * 10
+  uint16_t seaLevelHpaX10;   // sea-level pressure hPa * 10
 };
-
-static_assert(sizeof(SensorPacket) == 32, "SensorPacket must be exactly 32 bytes");
 
 // =====================================================
 // GLOBAL STATE
 // =====================================================
-unsigned long lastWindSampleMs = 0;
+unsigned long lastWindBinMs = 0;
+unsigned long lastTxMs = 0;
 unsigned long lastOledUpdateMs = 0;
 unsigned long lastSensorUpdateMs = 0;
+unsigned long lastTxWindSampleMs = 0;
 
-uint16_t seq = 0;
+uint32_t lastWindBinPulseTotal = 0;
+uint32_t txPacketCount = 0;
 
-float humidityPercent = NAN;
-float temperatureCelsius = NAN;
-float seaLevelHpa = NAN;
+float temperatureC = 20.0f;
+float humidityPct = 50.0f;
+float stationPressureHpa = 1013.25f;
+float seaLevelHpa = 1013.25f;
 
-float windDisplayMps = 0.0f;
+// Single wind value used by OLED and RF.
+float latestWindMps = 0.0f;
+float latestMean15Mps = 0.0f;
 
-// 15-second TX accumulator.
-// Updated only by the 100 ms wind sampler.
-uint32_t txAccumPulses = 0;
-uint32_t txAccumRejected = 0;
-unsigned long txAccumElapsedMs = 0;
-float txPeakMps = 0.0f;
-
-uint32_t lastSampleAcceptedPulses = 0;
-uint32_t lastSampleRejectedEdges = 0;
+// Debug values
+float latestRotorRps = 0.0f;
+float latestRotorRpm = 0.0f;
+uint32_t latestWindowPulses = 0;
+unsigned long latestWindowMs = 0;
 
 // =====================================================
 // WIND RING BUFFER
@@ -167,7 +169,6 @@ uint32_t lastSampleRejectedEdges = 0;
 struct WindBin {
   uint16_t elapsedMs;
   uint16_t pulses;
-  uint16_t rejected;
 };
 
 WindBin windRing[WIND_RING_SIZE];
@@ -175,8 +176,78 @@ uint8_t windWriteIndex = 0;
 uint8_t windValidCount = 0;
 
 // =====================================================
-// SCALE HELPERS
+// LOCAL 15 s MEAN HISTORY
 // =====================================================
+struct WindSample {
+  uint16_t sampleMs;
+  uint16_t windMpsX10;
+};
+
+WindSample windMeanRing[WIND_MEAN_RING_SIZE];
+uint8_t windMeanWriteIndex = 0;
+uint8_t windMeanCount = 0;
+
+// =====================================================
+// CONVERSIONS / SCALES
+// =====================================================
+float mpsToKt(float mps) {
+  return mps * 1.94384f;
+}
+
+float mpsToKmh(float mps) {
+  return mps * 3.6f;
+}
+
+float windMpsFromRotorRps(float rotorRps) {
+  float windMps = WIND_MPS_PER_RPS * rotorRps + calibrationOffsetMps;
+
+  if (windMps < 0.0f) {
+    windMps = 0.0f;
+  }
+
+  return windMps;
+}
+
+float windMpsFromRotorRpm(float rotorRpm) {
+  return windMpsFromRotorRps(rotorRpm / 60.0f);
+}
+
+uint16_t packMpsX10(float value) {
+  if (value < 0.0f) {
+    value = 0.0f;
+  }
+
+  float packed = value * 10.0f;
+
+  if (packed > 65535.0f) {
+    packed = 65535.0f;
+  }
+
+  return (uint16_t)lroundf(packed);
+}
+
+float unpackMpsX10(uint16_t value) {
+  return value / 10.0f;
+}
+
+int16_t packTempCx10(float value) {
+  return (int16_t)lroundf(value * 10.0f);
+}
+
+uint16_t packUnsignedX10(float value) {
+  if (value < 0.0f) {
+    value = 0.0f;
+  }
+
+  float packed = value * 10.0f;
+
+  if (packed > 65535.0f) {
+    packed = 65535.0f;
+  }
+
+  return (uint16_t)lroundf(packed);
+}
+
 uint8_t beaufortFromMps(float mps) {
   if (mps < 0.5f)  return 0;
   if (mps < 1.6f)  return 1;
@@ -203,46 +274,58 @@ uint8_t sshwsEquivalentFromMps(float mps) {
 }
 
 // =====================================================
-// WIND HELPERS
+// HALL ISR
 // =====================================================
-void snapshotWindCounters(uint32_t &acceptedOut, uint32_t &rejectedOut) {
-  noInterrupts();
-  acceptedOut = windAcceptedPulses;
-  rejectedOut = windRejectedEdges;
-  interrupts();
+void IRAM_ATTR onHallPulse() {
+  unsigned long nowUs = micros();
+
+  if (HALL_DEBOUNCE_US > 0 && lastHallPulseUs != 0) {
+    unsigned long dtUs = nowUs - lastHallPulseUs;
+
+    if (dtUs < HALL_DEBOUNCE_US) {
+      hallRejectedBounce++;
+      return;
+    }
+  }
+
+  lastHallPulseUs = nowUs;
+  hallPulseTotal++;
 }
 
-unsigned long getShortestAcceptedPeriodUs() {
+// =====================================================
+// HALL HELPERS
+// =====================================================
+uint32_t getHallPulseTotal() {
   noInterrupts();
-  unsigned long value = shortestAcceptedPeriodUs;
+  uint32_t value = hallPulseTotal;
   interrupts();
+
   return value;
 }
 
-float windMpsFromPulseHz(float pulseHz) {
-  float mps = calibrationOffsetMps + pulseHz * WIND_MPS_PER_PULSE_HZ;
-  return (mps < 0.0f) ? 0.0f : mps;
+void snapshotHallCounters(uint32_t &pulsesOut, uint32_t &rejectedOut) {
+  noInterrupts();
+  pulsesOut = hallPulseTotal;
+  rejectedOut = hallRejectedBounce;
+  interrupts();
 }
 
-float windKtFromMps(float mps) {
-  return mps * 1.94384f;
-}
-
+// =====================================================
+// WIND RING HELPERS
+// =====================================================
 void clearWindRing() {
+  windWriteIndex = 0;
+  windValidCount = 0;
+
   for (uint8_t i = 0; i < WIND_RING_SIZE; i++) {
     windRing[i].elapsedMs = 0;
     windRing[i].pulses = 0;
-    windRing[i].rejected = 0;
   }
-
-  windWriteIndex = 0;
-  windValidCount = 0;
 }
 
-void addWindBin(uint16_t elapsedMs, uint16_t pulses, uint16_t rejected) {
+void addWindBin(uint16_t elapsedMs, uint16_t pulses) {
   windRing[windWriteIndex].elapsedMs = elapsedMs;
   windRing[windWriteIndex].pulses = pulses;
-  windRing[windWriteIndex].rejected = rejected;
 
   windWriteIndex++;
 
@@ -255,60 +338,117 @@ void addWindBin(uint16_t elapsedMs, uint16_t pulses, uint16_t rejected) {
   }
 }
 
-bool pulseHzFromRecentBins(
-  unsigned long targetWindowMs,
-  unsigned long minimumWindowMs,
-  float &pulseHzOut
-) {
+bool rotorRpsFromRing(float &rpsOut) {
   unsigned long totalMs = 0;
   uint32_t totalPulses = 0;
 
-  for (uint8_t n = 0; n < windValidCount && totalMs < targetWindowMs; n++) {
+  for (uint8_t n = 0; n < windValidCount; n++) {
     int index = (int)windWriteIndex - 1 - n;
 
     while (index < 0) {
       index += WIND_RING_SIZE;
     }
 
-    totalMs += windRing[index].elapsedMs;
+    uint16_t binMs = windRing[index].elapsedMs;
+
+    if (binMs == 0) {
+      continue;
+    }
+
+    // Use complete bins only.
+    // This avoids counting all pulses from a bin while using only part of its time.
+    if (totalMs >= WIND_WINDOW_MS) {
+      break;
+    }
+
+    totalMs += binMs;
     totalPulses += windRing[index].pulses;
   }
 
-  if (totalMs < minimumWindowMs || totalMs == 0) {
-    pulseHzOut = 0.0f;
+  latestWindowMs = totalMs;
+  latestWindowPulses = totalPulses;
+
+  if (totalMs < WIND_MIN_WINDOW_MS || totalMs == 0) {
+    rpsOut = 0.0f;
     return false;
   }
 
-  pulseHzOut = ((float)totalPulses * 1000.0f) / (float)totalMs;
+  float seconds = (float)totalMs / 1000.0f;
+  float rotations = (float)totalPulses / (float)pulsesPerRevolution;
+
+  rpsOut = rotations / seconds;
   return true;
 }
 
 // =====================================================
-// ISR
+// 15 s MEAN HELPERS
 // =====================================================
-void IRAM_ATTR onMagnetDetected() {
-  unsigned long nowUs = micros();
-  unsigned long prevUs = lastAcceptedEdgeUs;
+void clearWindMeanRing() {
+  windMeanWriteIndex = 0;
+  windMeanCount = 0;
 
-  if (prevUs == 0) {
-    lastAcceptedEdgeUs = nowUs;
-    windAcceptedPulses++;
-    return;
+  for (uint8_t i = 0; i < WIND_MEAN_RING_SIZE; i++) {
+    windMeanRing[i].sampleMs = 0;
+    windMeanRing[i].windMpsX10 = 0;
+  }
+}
+
+void addWindMeanSample(uint16_t sampleMs, uint16_t windMpsX10) {
+  windMeanRing[windMeanWriteIndex].sampleMs = sampleMs;
+  windMeanRing[windMeanWriteIndex].windMpsX10 = windMpsX10;
+
+  windMeanWriteIndex++;
+
+  if (windMeanWriteIndex >= WIND_MEAN_RING_SIZE) {
+    windMeanWriteIndex = 0;
   }
 
-  unsigned long dtUs = nowUs - prevUs;
+  if (windMeanCount < WIND_MEAN_RING_SIZE) {
+    windMeanCount++;
+  }
+}
 
-  if (dtUs < EDGE_GATE_US) {
-    windRejectedEdges++;
-    return;
+bool meanMpsFromRecentSamples(
+  unsigned long targetWindowMs,
+  unsigned long minimumWindowMs,
+  float &meanMpsOut
+) {
+  unsigned long totalMs = 0;
+  float weightedSum = 0.0f;
+
+  for (uint8_t n = 0; n < windMeanCount && totalMs < targetWindowMs; n++) {
+    int index = (int)windMeanWriteIndex - 1 - n;
+
+    while (index < 0) {
+      index += WIND_MEAN_RING_SIZE;
+    }
+
+    uint16_t sampleMs = windMeanRing[index].sampleMs;
+
+    if (sampleMs == 0) {
+      continue;
+    }
+
+    unsigned long remainingMs = targetWindowMs - totalMs;
+    unsigned long usedMs = sampleMs;
+
+    if (usedMs > remainingMs) {
+      usedMs = remainingMs;
+    }
+
+    float mps = unpackMpsX10(windMeanRing[index].windMpsX10);
+
+    weightedSum += mps * (float)usedMs;
+    totalMs += usedMs;
   }
 
-  lastAcceptedEdgeUs = nowUs;
-  windAcceptedPulses++;
-
-  if (dtUs < shortestAcceptedPeriodUs) {
-    shortestAcceptedPeriodUs = dtUs;
+  if (totalMs < minimumWindowMs || totalMs == 0) {
+    meanMpsOut = 0.0f;
+    return false;
   }
+
+  meanMpsOut = weightedSum / (float)totalMs;
+  return true;
 }
 
 // =====================================================
@@ -359,7 +499,7 @@ bool readAHT20(float &humidityOut, float &temperatureOut) {
 
   Wire.requestFrom(AHT20_ADDRESS, 6);
 
-  if (Wire.available() != 6) {
+  if (Wire.available() < 6) {
     return false;
   }
 
@@ -369,18 +509,18 @@ bool readAHT20(float &humidityOut, float &temperatureOut) {
     data[i] = Wire.read();
   }
 
-  uint32_t humidity =
+  uint32_t humidityRaw =
     ((uint32_t)data[1] << 12) |
     ((uint32_t)data[2] << 4)  |
     (data[3] >> 4);
 
-  uint32_t temperature =
+  uint32_t temperatureRaw =
     ((uint32_t)(data[3] & 0x0F) << 16) |
     ((uint32_t)data[4] << 8) |
     data[5];
 
-  humidityOut = humidity * 100.0f / 1048576.0f;
-  temperatureOut = (temperature * 200.0f / 1048576.0f) - 50.0f;
+  humidityOut = humidityRaw * 100.0f / 1048576.0f;
+  temperatureOut = temperatureRaw * 200.0f / 1048576.0f - 50.0f;
 
   if (humidityOut < 0.0f) {
     humidityOut = 0.0f;
@@ -394,294 +534,243 @@ bool readAHT20(float &humidityOut, float &temperatureOut) {
 }
 
 // =====================================================
-// ENVIRONMENTAL SENSOR SERVICE
+// SENSOR SERVICE
 // =====================================================
-void updateEnvironmentalSensorsNow() {
-  float hTmp;
-  float tTmp;
+void readSensorsNow() {
+  float h;
+  float t;
 
-  if (readAHT20(hTmp, tTmp)) {
-    humidityPercent = hTmp;
-    temperatureCelsius = tTmp;
+  if (readAHT20(h, t)) {
+    humidityPct = h;
+    temperatureC = t;
   }
 
-  float pressureHpa = bmp.readPressure() / 100.0f;
+  if (bmpOk) {
+    stationPressureHpa = bmp.readPressure() / 100.0f;
+  }
 
   seaLevelHpa = reduceToSeaLevelWMO(
-    pressureHpa,
-    isnan(temperatureCelsius) ? 20.0f : temperatureCelsius,
-    isnan(humidityPercent) ? 50.0f : humidityPercent,
+    stationPressureHpa,
+    temperatureC,
+    humidityPct,
     altitudeM
   );
 }
 
-void serviceEnvironmentalSensors() {
+void serviceSensors() {
   unsigned long now = millis();
 
-  if (now - lastSensorUpdateMs < SENSOR_UPDATE_MS) {
-    return;
+  if (now - lastSensorUpdateMs >= SENSOR_UPDATE_MS) {
+    readSensorsNow();
+    lastSensorUpdateMs = millis();
   }
-
-  updateEnvironmentalSensorsNow();
-  lastSensorUpdateMs = millis();
 }
 
 // =====================================================
-// WIND SAMPLER SERVICE
+// WIND SERVICE
 // =====================================================
-void serviceWindSampler() {
-  unsigned long now = millis();
+void serviceWind() {
+  unsigned long nowMs = millis();
 
-  if (now - lastWindSampleMs < WIND_SAMPLE_MS) {
+  if (nowMs - lastWindBinMs < WIND_BIN_MS) {
     return;
   }
 
-  uint32_t acceptedNow;
-  uint32_t rejectedNow;
-  snapshotWindCounters(acceptedNow, rejectedNow);
+  uint32_t pulseTotalNow = getHallPulseTotal();
 
-  uint32_t deltaPulses32 = acceptedNow - lastSampleAcceptedPulses;
-  uint32_t deltaRejected32 = rejectedNow - lastSampleRejectedEdges;
-  unsigned long elapsedLong = now - lastWindSampleMs;
+  uint32_t deltaPulses32 = pulseTotalNow - lastWindBinPulseTotal;
+  unsigned long elapsedMsLong = nowMs - lastWindBinMs;
 
-  lastSampleAcceptedPulses = acceptedNow;
-  lastSampleRejectedEdges = rejectedNow;
-  lastWindSampleMs = now;
+  lastWindBinPulseTotal = pulseTotalNow;
+  lastWindBinMs = nowMs;
 
   uint16_t elapsedMs =
-    (elapsedLong > 65535UL) ? 65535 : (uint16_t)elapsedLong;
+    (elapsedMsLong > 65535UL) ? 65535 : (uint16_t)elapsedMsLong;
 
-  uint16_t deltaPulses =
+  uint16_t pulses =
     (deltaPulses32 > 65535UL) ? 65535 : (uint16_t)deltaPulses32;
 
-  uint16_t deltaRejected =
-    (deltaRejected32 > 65535UL) ? 65535 : (uint16_t)deltaRejected32;
+  addWindBin(elapsedMs, pulses);
 
-  addWindBin(elapsedMs, deltaPulses, deltaRejected);
+  float rotorRps = 0.0f;
 
-  // 15-second report accumulation.
-  txAccumPulses += deltaPulses32;
-  txAccumRejected += deltaRejected32;
-  txAccumElapsedMs += elapsedLong;
+  if (rotorRpsFromRing(rotorRps)) {
+    latestRotorRps = rotorRps;
+    latestRotorRpm = rotorRps * 60.0f;
+    latestWindMps = windMpsFromRotorRps(rotorRps);
+  } else {
+    latestRotorRps = 0.0f;
+    latestRotorRpm = 0.0f;
+    latestWindMps = 0.0f;
+  }
 
-  // Stable live wind from rolling 4-second window.
-  float currentPulseHz = 0.0f;
-  float targetMps = 0.0f;
+  if (latestWindMps < 0.05f) {
+    latestWindMps = 0.0f;
+  }
+}
 
-  if (pulseHzFromRecentBins(
-        WIND_CURRENT_WINDOW_MS,
-        WIND_CURRENT_MIN_MS,
-        currentPulseHz
+// =====================================================
+// RADIO SERVICE
+// =====================================================
+void sendPacket() {
+  unsigned long nowMs = millis();
+  unsigned long sampleMsLong = nowMs - lastTxWindSampleMs;
+
+  if (sampleMsLong == 0) {
+    sampleMsLong = 1;
+  }
+
+  lastTxWindSampleMs = nowMs;
+
+  uint16_t sampleMs16 =
+    (sampleMsLong > 65535UL) ? 65535 : (uint16_t)sampleMsLong;
+
+  uint16_t windMpsX10 = packMpsX10(latestWindMps);
+
+  addWindMeanSample(sampleMs16, windMpsX10);
+
+  float meanPreview = 0.0f;
+
+  if (meanMpsFromRecentSamples(
+        WIND_MEAN_WINDOW_MS,
+        WIND_MEAN_MIN_MS,
+        meanPreview
       )) {
-    targetMps = windMpsFromPulseHz(currentPulseHz);
+    latestMean15Mps = meanPreview;
+  } else {
+    latestMean15Mps = unpackMpsX10(windMpsX10);
   }
 
-  float alpha = (targetMps > windDisplayMps)
-    ? WIND_DISPLAY_ALPHA_RISE
-    : WIND_DISPLAY_ALPHA_FALL;
+  WeatherPacket tx;
 
-  windDisplayMps += alpha * (targetMps - windDisplayMps);
+  tx.txMs = nowMs;
+  tx.sampleMs = sampleMs16;
+  tx.windMpsX10 = windMpsX10;
+  tx.temperatureCx10 = packTempCx10(temperatureC);
+  tx.humidityX10 = packUnsignedX10(humidityPct);
+  tx.seaLevelHpaX10 = packUnsignedX10(seaLevelHpa);
 
-  if (windDisplayMps < 0.05f) {
-    windDisplayMps = 0.0f;
-  }
+  bool ok = radio.write(&tx, sizeof(tx));
 
-  // 3-second gust/peak inside current TX interval.
-  if (txAccumElapsedMs >= WIND_GUST_WINDOW_MS) {
-    float gustPulseHz = 0.0f;
+  txPacketCount++;
 
-    if (pulseHzFromRecentBins(
-          WIND_GUST_WINDOW_MS,
-          WIND_GUST_WINDOW_MS,
-          gustPulseHz
-        )) {
-      float gustMps = windMpsFromPulseHz(gustPulseHz);
+  uint32_t pulsesNow;
+  uint32_t bounceNow;
+  snapshotHallCounters(pulsesNow, bounceNow);
 
-      if (gustMps > txPeakMps) {
-        txPeakMps = gustMps;
-      }
-    }
-  }
+  Serial.print("TX ");
+  Serial.print(txPacketCount);
+
+  Serial.print(" sampleMs=");
+  Serial.print(tx.sampleMs);
+
+  Serial.print(" wind=");
+  Serial.print(unpackMpsX10(tx.windMpsX10), 1);
+  Serial.print(" m/s");
+
+  Serial.print(" rpm=");
+  Serial.print(latestRotorRpm, 1);
+
+  Serial.print(" rps=");
+  Serial.print(latestRotorRps, 3);
+
+  Serial.print(" winP=");
+  Serial.print(latestWindowPulses);
+
+  Serial.print(" winMs=");
+  Serial.print(latestWindowMs);
+
+  Serial.print(" mean15=");
+  Serial.print(latestMean15Mps, 1);
+  Serial.print(" m/s");
+
+  Serial.print(" pulses=");
+  Serial.print(pulsesNow);
+
+  Serial.print(" bounce=");
+  Serial.print(bounceNow);
+
+  Serial.print(" T=");
+  Serial.print(temperatureC, 1);
+
+  Serial.print(" H=");
+  Serial.print(humidityPct, 1);
+
+  Serial.print(" Psl=");
+  Serial.print(seaLevelHpa, 1);
+
+  Serial.print(" radio=");
+  Serial.println(ok ? "OK" : "FAIL");
 }
 
-float txMeanMps() {
-  if (txAccumElapsedMs == 0) {
-    return 0.0f;
+void serviceRadio() {
+  unsigned long now = millis();
+
+  if (now - lastTxMs >= TX_INTERVAL_MS) {
+    sendPacket();
+    lastTxMs = millis();
   }
-
-  float pulseHz =
-    ((float)txAccumPulses * 1000.0f) / (float)txAccumElapsedMs;
-
-  return windMpsFromPulseHz(pulseHz);
-}
-
-void resetTxAccumulator() {
-  txAccumPulses = 0;
-  txAccumRejected = 0;
-  txAccumElapsedMs = 0;
-  txPeakMps = 0.0f;
 }
 
 // =====================================================
 // OLED
 // =====================================================
-void updateDisplay(
-  float humidityVal,
-  float temperatureVal,
-  float pressureVal,
-  float windValMps,
-  float meanPreviewMps,
-  uint16_t seqVal
-) {
-  float windKt = windKtFromMps(windValMps);
-  float meanKt = windKtFromMps(meanPreviewMps);
-
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-
-  display.print("Pkg: ");
-  display.println(seqVal);
-
-  display.print("W: ");
-  display.print(windKt, 1);
-  display.println(" kt");
-
-  display.print("T: ");
-
-  if (isnan(temperatureVal)) {
-    display.println("--.- C");
-  } else {
-    display.print(temperatureVal, 1);
-    display.println(" C");
-  }
-
-  display.print("H: ");
-
-  if (isnan(humidityVal)) {
-    display.println("--.- %");
-  } else {
-    display.print(humidityVal, 1);
-    display.println(" %");
-  }
-
-  display.print("P: ");
-
-  if (isnan(pressureVal)) {
-    display.println("----.- hPa");
-  } else {
-    display.print(pressureVal, 1);
-    display.println(" hPa");
-  }
-
-  if (meanKt < 64.0f) {
-    display.print("Scale: Bft ");
-    display.println(beaufortFromMps(meanPreviewMps));
-  } else {
-    display.print("Scale: S-S-eq ");
-    display.println(sshwsEquivalentFromMps(meanPreviewMps));
-  }
-
-  display.display();
-}
-
 void serviceDisplay() {
+  if (!oledOk) {
+    return;
+  }
+
   unsigned long now = millis();
 
   if (now - lastOledUpdateMs < OLED_UPDATE_MS) {
     return;
   }
 
-  updateDisplay(
-    humidityPercent,
-    temperatureCelsius,
-    seaLevelHpa,
-    windDisplayMps,
-    txMeanMps(),
-    seq
-  );
+  float displayedWindMps = unpackMpsX10(packMpsX10(latestWindMps));
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+
+  display.print("TX: ");
+  display.println(txPacketCount);
+
+  display.print("W: ");
+  display.print(displayedWindMps, 1);
+  display.println(" m/s");
+
+  display.print("RPM: ");
+  display.print(latestRotorRpm, 0);
+  display.println();
+
+  display.print("M15: ");
+  display.print(latestMean15Mps, 1);
+  display.println(" m/s");
+
+  display.print("T: ");
+  display.print(temperatureC, 1);
+  display.println(" C");
+
+  display.print("H: ");
+  display.print(humidityPct, 1);
+  display.println(" %");
+
+  display.print("P: ");
+  display.print(seaLevelHpa, 1);
+  display.println(" hPa");
+
+  if (mpsToKt(latestMean15Mps) < 64.0f) {
+    display.print("Scale: Bft ");
+    display.println(beaufortFromMps(latestMean15Mps));
+  } else {
+    display.print("Scale: SS ");
+    display.println(sshwsEquivalentFromMps(latestMean15Mps));
+  }
+
+  display.display();
 
   lastOledUpdateMs = millis();
-}
-
-// =====================================================
-// TRANSMIT SERVICE
-// =====================================================
-void serviceTransmit() {
-  if (txAccumElapsedMs < SEND_INTERVAL_MS) {
-    return;
-  }
-
-  float reportMeanMps = txMeanMps();
-  float reportPeakMps = txPeakMps;
-  float reportCurrentMps = windDisplayMps;
-
-  uint32_t reportPulses = txAccumPulses;
-  uint32_t reportRejected = txAccumRejected;
-  unsigned long reportElapsedMs = txAccumElapsedMs;
-
-  SensorPacket tx{};
-
-  tx.magic = PACKET_MAGIC;
-  tx.version = PACKET_VERSION;
-  tx.reserved = 0;
-  tx.seq = seq++;
-
-  tx.temperatureC = temperatureCelsius;
-  tx.humidityPct = humidityPercent;
-  tx.seaLevelHpa = seaLevelHpa;
-
-  tx.windInstantMps = reportCurrentMps;
-  tx.windMeanMps = reportMeanMps;
-  tx.windPeakMps = reportPeakMps;
-
-  resetTxAccumulator();
-
-  bool ok = radio.write(&tx, sizeof(tx));
-
-  Serial.print("TX seq=");
-  Serial.print(tx.seq);
-
-  Serial.print(" current=");
-  Serial.print(tx.windInstantMps, 2);
-  Serial.print(" m/s ");
-  Serial.print(windKtFromMps(tx.windInstantMps), 1);
-  Serial.print(" kt");
-
-  Serial.print(" mean15=");
-  Serial.print(tx.windMeanMps, 2);
-  Serial.print(" m/s ");
-  Serial.print(windKtFromMps(tx.windMeanMps), 1);
-  Serial.print(" kt");
-
-  Serial.print(" peak3=");
-  Serial.print(tx.windPeakMps, 2);
-  Serial.print(" m/s ");
-  Serial.print(windKtFromMps(tx.windPeakMps), 1);
-  Serial.print(" kt");
-
-  Serial.print(" elapsedMs=");
-  Serial.print(reportElapsedMs);
-
-  Serial.print(" pulses=");
-  Serial.print(reportPulses);
-
-  Serial.print(" rejected=");
-  Serial.print(reportRejected);
-
-  Serial.print(" gateUs=");
-  Serial.print(EDGE_GATE_US);
-
-  unsigned long shortestUs = getShortestAcceptedPeriodUs();
-
-  if (shortestUs != 0xFFFFFFFFUL) {
-    Serial.print(" shortestAcceptedUs=");
-    Serial.print(shortestUs);
-  }
-
-  Serial.print(" ");
-  Serial.println(ok ? "OK" : "FAIL");
 }
 
 // =====================================================
@@ -692,147 +781,166 @@ void setup() {
   delay(1000);
 
   Serial.println();
-  Serial.println("TX v3.3 - stable efficient wind sampler");
+  Serial.println("TX RPM-based wind x10 + OLED + ACK radio");
 
-  Wire.begin(16, 17); // SDA, SCL
+  // I2C
+  Wire.begin(16, 17);
   Wire.setClock(400000);
 
-  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
-    Serial.println("SSD1306 init failed");
-    while (true) {
-      delay(100);
-    }
-  }
+  // OLED
+  oledOk = display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS);
 
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0, 0);
-  display.println("TX booting...");
-  display.display();
-
-  if (!bmp.begin(BMP280_ADDRESS)) {
-    Serial.println("BMP280 not found");
-
+  if (oledOk) {
     display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
     display.setCursor(0, 0);
-    display.println("BMP280 not found");
+    display.println("TX booting...");
     display.display();
-
-    while (true) {
-      delay(100);
-    }
+  } else {
+    Serial.println("OLED not found");
   }
 
-  bmp.setSampling(
-    Adafruit_BMP280::MODE_NORMAL,
-    Adafruit_BMP280::SAMPLING_X2,
-    Adafruit_BMP280::SAMPLING_X16,
-    Adafruit_BMP280::FILTER_X16,
-    Adafruit_BMP280::STANDBY_MS_500
-  );
-
+  // AHT20
   initAHT20();
 
+  // BMP280
+  bmpOk = bmp.begin(BMP280_ADDRESS);
+
+  if (bmpOk) {
+    bmp.setSampling(
+      Adafruit_BMP280::MODE_NORMAL,
+      Adafruit_BMP280::SAMPLING_X2,
+      Adafruit_BMP280::SAMPLING_X16,
+      Adafruit_BMP280::FILTER_X16,
+      Adafruit_BMP280::STANDBY_MS_500
+    );
+  } else {
+    Serial.println("BMP280 not found");
+  }
+
+  // nRF24
   SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CSN_PIN);
 
   if (!radio.begin()) {
     Serial.println("nRF24 begin failed");
-
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("nRF24 failed");
-    display.display();
-
     while (true) {
       delay(100);
     }
   }
 
+  radio.setChannel(RADIO_CHANNEL);
   radio.setDataRate(RF24_250KBPS);
-  radio.setPayloadSize(sizeof(SensorPacket));
+  radio.setPALevel(RF24_PA_LOW);
+
+  // Fixed payload + ACK enabled.
+  radio.setAutoAck(true);
   radio.setRetries(5, 15);
+  radio.setPayloadSize(sizeof(WeatherPacket));
+
   radio.openWritingPipe(pipeAddress);
   radio.stopListening();
+  radio.flush_tx();
 
+  // Wind
   clearWindRing();
+  clearWindMeanRing();
 
   pinMode(hallPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(hallPin), onMagnetDetected, FALLING);
+  attachInterrupt(digitalPinToInterrupt(hallPin), onHallPulse, FALLING);
+
+  // Initial sensor read
+  readSensorsNow();
 
   unsigned long startMs = millis();
+  uint32_t startPulses = getHallPulseTotal();
 
-  uint32_t acceptedStart;
-  uint32_t rejectedStart;
-  snapshotWindCounters(acceptedStart, rejectedStart);
+  lastWindBinMs = startMs;
+  lastWindBinPulseTotal = startPulses;
 
-  lastSampleAcceptedPulses = acceptedStart;
-  lastSampleRejectedEdges = rejectedStart;
-
-  lastWindSampleMs = startMs;
+  lastTxMs = startMs;
+  lastTxWindSampleMs = startMs;
   lastOledUpdateMs = startMs;
   lastSensorUpdateMs = startMs;
 
-  resetTxAccumulator();
+  Serial.println();
+  Serial.println("Geometry:");
+  Serial.print("Magnet radius m: ");
+  Serial.println(magnetRadiusMeters, 4);
 
-  updateEnvironmentalSensorsNow();
-  lastSensorUpdateMs = millis();
+  Serial.print("Cup radius m: ");
+  Serial.println(cupRadiusMeters, 4);
 
-  Serial.print("Packet size: ");
-  Serial.print(sizeof(SensorPacket));
-  Serial.println(" bytes");
+  Serial.print("Cup assembly diameter m: ");
+  Serial.println(cupAssemblyDiameterMeters, 4);
 
-  Serial.print("Wind coefficient: ");
-  Serial.print(WIND_MPS_PER_PULSE_HZ, 6);
-  Serial.println(" m/s per pulse/s");
+  Serial.print("Cup circumference m: ");
+  Serial.println(CUP_CIRCUMFERENCE_M, 4);
 
-  Serial.print("Wind coefficient: ");
-  Serial.print(WIND_KT_PER_PULSE_HZ, 6);
-  Serial.println(" kt per pulse/s");
+  Serial.print("Pulses per revolution: ");
+  Serial.println(pulsesPerRevolution);
 
-  Serial.print("Wind sample interval: ");
-  Serial.print(WIND_SAMPLE_MS);
-  Serial.println(" ms");
+  Serial.println();
+  Serial.println("Calibration:");
+  Serial.print("Calibration factor: ");
+  Serial.println(calibrationFactor, 4);
 
-  Serial.print("Live wind window: ");
-  Serial.print(WIND_CURRENT_WINDOW_MS);
-  Serial.println(" ms");
+  Serial.print("Wind m/s per rotor RPS: ");
+  Serial.println(WIND_MPS_PER_RPS, 4);
 
-  Serial.print("Gust wind window: ");
-  Serial.print(WIND_GUST_WINDOW_MS);
-  Serial.println(" ms");
+  Serial.print("Wind m/s per rotor RPM: ");
+  Serial.println(WIND_MPS_PER_RPM, 5);
 
-  Serial.print("OLED update interval: ");
-  Serial.print(OLED_UPDATE_MS);
-  Serial.println(" ms");
+  Serial.print("Wind m/s per pulse Hz: ");
+  Serial.println(WIND_MPS_PER_PULSE_HZ, 5);
 
-  Serial.print("TX interval: ");
-  Serial.print(SEND_INTERVAL_MS);
-  Serial.println(" ms");
+  Serial.println();
+  Serial.println("Measurement:");
+  Serial.print("Wind bin ms: ");
+  Serial.println(WIND_BIN_MS);
 
-  Serial.print("Max valid wind gate: ");
-  Serial.print(MAX_VALID_WIND_KT, 1);
-  Serial.println(" kt");
+  Serial.print("Wind window ms: ");
+  Serial.println(WIND_WINDOW_MS);
 
-  Serial.print("Final edge gate: ");
-  Serial.print(EDGE_GATE_US);
-  Serial.println(" us");
+  Serial.print("Wind minimum window ms: ");
+  Serial.println(WIND_MIN_WINDOW_MS);
 
-  display.clearDisplay();
-  display.setCursor(0, 0);
-  display.println("TX ready");
-  display.print("Gate: ");
-  display.print(EDGE_GATE_US);
-  display.println(" us");
-  display.display();
+  Serial.print("Hall debounce us: ");
+  Serial.println(HALL_DEBOUNCE_US);
+
+  Serial.println();
+  Serial.println("Radio:");
+  Serial.print("Radio chip: ");
+  Serial.println(radio.isChipConnected() ? "OK" : "NOT_CONNECTED");
+
+  Serial.print("WeatherPacket bytes: ");
+  Serial.println(sizeof(WeatherPacket));
+
+  Serial.print("Channel: ");
+  Serial.println(RADIO_CHANNEL);
+
+  if (oledOk) {
+    display.clearDisplay();
+    display.setCursor(0, 0);
+    display.println("TX ready");
+    display.print("K=");
+    display.println(calibrationFactor, 2);
+    display.print("Pkt ");
+    display.print(sizeof(WeatherPacket));
+    display.println(" B");
+    display.display();
+  }
+
+  Serial.println();
+  Serial.println("TX ready");
 }
 
 // =====================================================
 // LOOP
 // =====================================================
 void loop() {
-  serviceWindSampler();
-  serviceTransmit();
-  serviceEnvironmentalSensors();
+  serviceWind();
+  serviceRadio();
+  serviceSensors();
   serviceDisplay();
 }
